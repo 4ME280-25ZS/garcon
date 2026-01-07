@@ -14,8 +14,14 @@ function createSupabaseClient(url, key){
   return createFn(url, key);
 }
 
-const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-if(!supabase) console.warn('Supabase UMD not detected — operating in offline preview mode.');
+let supabaseClient = null;
+try{
+  supabaseClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  if(!supabaseClient) console.warn('Supabase UMD not detected — operating in offline preview mode.');
+}catch(e){
+  console.warn('Error creating Supabase client (possibly storage blocked):', e);
+  supabaseClient = null;
+}
 
 const ITEMS = [
   { id: 'g1', title: 'Kniha: Moderní JavaScript', desc: 'Dobrá kniha o moderním JS a best practices.' },
@@ -31,9 +37,9 @@ const ITEMS = [
 ];
 
 async function loadReservations(){
-  if(!supabase) return {};
+  if(!supabaseClient) return {};
   try{
-    const { data, error } = await supabase.from('reservations').select('item_id,reserved_by');
+    const { data, error } = await supabaseClient.from('reservations').select('item_id,reserved_by');
     if(error){ console.warn('Supabase read error', error); return {}; }
     const map = {};
     data.forEach(r => { if(r.item_id) map[r.item_id] = r.reserved_by; });
@@ -42,11 +48,11 @@ async function loadReservations(){
 }
 
 async function reserveRemote(itemId, name){
-  if(!supabase) return { ok:false, reason:'offline' };
+  if(!supabaseClient) return { ok:false, reason:'offline' };
   try{
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('reserve_item', { p_item_id: itemId, p_name: name });
+    const { data: rpcData, error: rpcErr } = await supabaseClient.rpc('reserve_item', { p_item_id: itemId, p_name: name });
     if(rpcErr){
-      const { error } = await supabase.from('reservations').insert({ item_id: itemId, reserved_by: name });
+      const { error } = await supabaseClient.from('reservations').insert({ item_id: itemId, reserved_by: name });
       if(error) return { ok:false, reason: error.message };
       return { ok:true };
     }
@@ -56,11 +62,11 @@ async function reserveRemote(itemId, name){
 }
 
 async function releaseRemote(itemId){
-  if(!supabase) return false;
+  if(!supabaseClient) return false;
   try{
-    const { error: rpcErr } = await supabase.rpc('release_item', { p_item_id: itemId });
+    const { error: rpcErr } = await supabaseClient.rpc('release_item', { p_item_id: itemId });
     if(rpcErr){
-      const { error } = await supabase.from('reservations').delete().eq('item_id', itemId);
+      const { error } = await supabaseClient.from('reservations').delete().eq('item_id', itemId);
       if(error) throw error;
     }
     return true;
