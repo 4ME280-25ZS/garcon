@@ -1,27 +1,22 @@
-// Supabase-enabled wishlist client
+// Clean, self-contained wishlist client with graceful fallback
+console.log('wishlist script loaded');
+
 // Supabase project credentials (anon/public key)
 const SUPABASE_URL = 'https://ixgcnewjqpoptiynnzbx.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Wwil1CxCGCArGLAIHrZXcA_whzPZ8-N';
 
-// Create Supabase client — UMD bundle exposes different globals depending on build.
 function createSupabaseClient(url, key){
   const createFn = (window.supabase && window.supabase.createClient) ? window.supabase.createClient
     : (window.supabaseJs && window.supabaseJs.createClient) ? window.supabaseJs.createClient
     : (window.Supabase && window.Supabase.createClient) ? window.Supabase.createClient
     : null;
-  if(!createFn){
-    console.error('Supabase UMD not found. Make sure supabase script is loaded before this script.');
-    return null;
-  }
+  if(!createFn) return null;
   return createFn(url, key);
 }
 
 const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-if(!supabase){
-  // show a simple fallback UI message
-  const listEl = document.getElementById('list');
-  if(listEl) listEl.innerHTML = '<div style="color:#b91c1c;padding:12px;border:1px solid #f5c6cb;border-radius:6px">Chyba: Supabase knihovna nebyla načtena. Zkus stránku znovu.</div>';
-}
+if(!supabase) console.warn('Supabase UMD not detected — operating in offline preview mode.');
+
 const ITEMS = [
   { id: 'g1', title: 'Kniha: Moderní JavaScript', desc: 'Dobrá kniha o moderním JS a best practices.' },
   { id: 'g2', title: 'Bluetooth sluchátka', desc: 'Bezdrátová sluchátka s dobrým ANC.' },
@@ -35,40 +30,33 @@ const ITEMS = [
   { id: 'g10', title: 'Kvalitní zápisník', desc: 'Moleskine nebo ekvivalent pro poznámky.' }
 ];
 
-const listEl = document.getElementById('list');
-
 async function loadReservations(){
+  if(!supabase) return {};
   try{
     const { data, error } = await supabase.from('reservations').select('item_id,reserved_by');
-    if(error){
-      console.warn('Supabase read error', error);
-      return {};
-    }
+    if(error){ console.warn('Supabase read error', error); return {}; }
     const map = {};
     data.forEach(r => { if(r.item_id) map[r.item_id] = r.reserved_by; });
     return map;
-  }catch(e){
-    console.error(e);
-    return {};
-  }
+  }catch(e){ console.error('loadReservations', e); return {}; }
 }
 
 async function reserveRemote(itemId, name){
+  if(!supabase) return { ok:false, reason:'offline' };
   try{
     const { data: rpcData, error: rpcErr } = await supabase.rpc('reserve_item', { p_item_id: itemId, p_name: name });
     if(rpcErr){
-      const { data, error } = await supabase.from('reservations').insert({ item_id: itemId, reserved_by: name });
+      const { error } = await supabase.from('reservations').insert({ item_id: itemId, reserved_by: name });
       if(error) return { ok:false, reason: error.message };
       return { ok:true };
     }
-    if(rpcData && rpcData[0] && (rpcData[0].success === true || rpcData.success === true)) return { ok:true };
+    if((Array.isArray(rpcData) && rpcData[0] && rpcData[0].success===true) || rpcData===true) return { ok:true };
     return { ok:false, reason:'already_reserved' };
-  }catch(e){
-    return { ok:false, reason: e.message };
-  }
+  }catch(e){ console.error('reserveRemote', e); return { ok:false, reason: e.message }; }
 }
 
 async function releaseRemote(itemId){
+  if(!supabase) return false;
   try{
     const { error: rpcErr } = await supabase.rpc('release_item', { p_item_id: itemId });
     if(rpcErr){
@@ -76,14 +64,31 @@ async function releaseRemote(itemId){
       if(error) throw error;
     }
     return true;
-  }catch(e){
-    console.error('release error', e);
-    return false;
-  }
+  }catch(e){ console.error('releaseRemote', e); return false; }
+}
+
+function renderStatic(){
+  const listEl = document.getElementById('list');
+  if(!listEl) return;
+  listEl.innerHTML = '';
+  ITEMS.forEach(item=>{
+    const el = document.createElement('div'); el.className='item';
+    const meta = document.createElement('div'); meta.className='meta';
+    const title = document.createElement('div'); title.className='title'; title.textContent = item.title;
+    const desc = document.createElement('div'); desc.className='desc'; desc.textContent = item.desc;
+    meta.appendChild(title); meta.appendChild(desc);
+    const control = document.createElement('div');
+    const note = document.createElement('div'); note.style.color='#666'; note.textContent='(Offline preview)';
+    control.appendChild(note);
+    el.appendChild(meta); el.appendChild(control);
+    listEl.appendChild(el);
+  });
 }
 
 async function render(){
   const state = await loadReservations();
+  const listEl = document.getElementById('list');
+  if(!listEl) { console.error('List container #list not found'); return; }
   listEl.innerHTML = '';
   ITEMS.forEach(item=>{
     const el = document.createElement('div'); el.className='item';
@@ -97,10 +102,7 @@ async function render(){
     if(reservedBy){
       const r = document.createElement('div'); r.className='reserved'; r.textContent = 'Rezervováno: ' + reservedBy;
       const btn = document.createElement('button'); btn.className='btn btn-release'; btn.textContent='Uvolnit';
-      btn.onclick = async ()=>{
-        const ok = await releaseRemote(item.id);
-        if(ok) render(); else alert('Chyba při uvolňování.');
-      };
+      btn.onclick = async ()=>{ const ok = await releaseRemote(item.id); if(ok) render(); else alert('Chyba při uvolňování.'); };
       control.appendChild(r); control.appendChild(btn);
     } else {
       const btn = document.createElement('button'); btn.className='btn btn-reserve'; btn.textContent='Rezervovat';
@@ -108,7 +110,7 @@ async function render(){
         const name = prompt('Zadej své jméno (bude zobrazeno u položky):');
         if(!name) return;
         const result = await reserveRemote(item.id, name.trim());
-        if(result.ok){ render(); } else if(result.reason==='already_reserved'){ alert('Položku už mezitím někdo rezervoval.'); render(); } else { alert('Chyba: '+(result.reason||'unknown')); }
+        if(result.ok){ render(); } else if(result.reason==='already_reserved'){ alert('Položku už mezitím někdo rezervoval.'); render(); } else if(result.reason==='offline'){ alert('Není připojení k databázi (offline).'); } else { alert('Chyba: '+(result.reason||'unknown')); }
       };
       control.appendChild(btn);
     }
@@ -118,5 +120,5 @@ async function render(){
   });
 }
 
-window.addEventListener('load', render);
+window.addEventListener('load', ()=>{ if(!supabase) renderStatic(); else render(); });
 
