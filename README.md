@@ -25,4 +25,6 @@ Where to look
 - `vizitka/` — business card files and `vizitka/release-notes.md`.
 - `wishlist/` — wishlist UI, `wishlist/script.js`, `wishlist/supabase_setup.sql`, and `wishlist/release-notes.md`.
 
+- `instructions.md` — quick setup, Supabase steps, troubleshooting, and developer notes.
+
 If you need me to add CI for deployment or a migration workflow, say the word and I'll prepare a safe GitHub Actions flow.
