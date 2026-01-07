@@ -34,3 +34,6 @@ Below are the exact prompts you sent during our session, in chronological order.
 
 --
 I have replaced the summarized history with verbatim copies of your past prompts. From now on I will append each future prompt exactly as you type it.
+
+### 2026-01-07 00:00:00Z
+Aktualizuj tu historii promptů ty.
