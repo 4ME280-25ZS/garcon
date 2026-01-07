@@ -3,8 +3,25 @@
 const SUPABASE_URL = 'https://ixgcnewjqpoptiynnzbx.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Wwil1CxCGCArGLAIHrZXcA_whzPZ8-N';
 
-const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Create Supabase client — UMD bundle exposes different globals depending on build.
+function createSupabaseClient(url, key){
+  const createFn = (window.supabase && window.supabase.createClient) ? window.supabase.createClient
+    : (window.supabaseJs && window.supabaseJs.createClient) ? window.supabaseJs.createClient
+    : (window.Supabase && window.Supabase.createClient) ? window.Supabase.createClient
+    : null;
+  if(!createFn){
+    console.error('Supabase UMD not found. Make sure supabase script is loaded before this script.');
+    return null;
+  }
+  return createFn(url, key);
+}
 
+const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if(!supabase){
+  // show a simple fallback UI message
+  const listEl = document.getElementById('list');
+  if(listEl) listEl.innerHTML = '<div style="color:#b91c1c;padding:12px;border:1px solid #f5c6cb;border-radius:6px">Chyba: Supabase knihovna nebyla načtena. Zkus stránku znovu.</div>';
+}
 const ITEMS = [
   { id: 'g1', title: 'Kniha: Moderní JavaScript', desc: 'Dobrá kniha o moderním JS a best practices.' },
   { id: 'g2', title: 'Bluetooth sluchátka', desc: 'Bezdrátová sluchátka s dobrým ANC.' },
