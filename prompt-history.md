@@ -37,3 +37,6 @@ I have replaced the summarized history with verbatim copies of your past prompts
 
 ### 2026-01-07 00:00:00Z
 Aktualizuj tu historii promptů ty.
+
+### 2026-01-07 00:01:00Z
+Automatic prompt logging enabled; future prompts will be appended verbatim and pushed to the repository.
